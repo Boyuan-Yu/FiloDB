@@ -729,19 +729,23 @@ class MultiPartitionPlanner(val partitionLocationProvider: PartitionLocationProv
       if (partitions.length > 1 && queryConfig.routingConfig.supportRemoteRawExport) {
         // Here we check if the assignment ranges cover the entire query duration
         val (_, lastTimeRange) = assignmentRanges.last
-        if (lastTimeRange.endMs < timeRange.endMs) {
+        if (lastTimeRange.endMs < timeRange.endMs) {  //when this is true, gap is so big
           // this means we need to add the missing time range to the end to execute the bit on Query service
           val (gapStartTimeMs, gapEndTimeMs) = stepMsOpt match {
             case Some(step)   =>   (snapToStep(lastTimeRange.endMs + 1, step, timeRange.startMs),
               timeRange.endMs)
             case None           => (lastTimeRange.endMs, timeRange.endMs)
           }
+          if (gapStartTimeMs > gapEndTimeMs){
+            execPlans
+          } else {
           val newParams = qParams.copy(startSecs = gapStartTimeMs / 1000, endSecs = gapEndTimeMs / 1000)
           val newContext = qContext.copy(origQueryParams = newParams)
           val newLp = rewritePlanWithRemoteRawExport(logicalPlan,
             IntervalSelector(gapStartTimeMs, gapEndTimeMs),
             additionalLookbackMs = 0L.max(gapStartTimeMs - lastTimeRange.startMs))
           execPlans ++ walkLogicalPlanTree(newLp, newContext, forceInProcess = true).plans
+          }
         } else {
           execPlans
         }
